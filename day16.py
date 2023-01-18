@@ -1,6 +1,5 @@
 import re
 from collections import deque
-from functools import cmp_to_key
 import time
 timer = time.perf_counter()
 
@@ -23,65 +22,84 @@ class Valve:
     def __repr__(self) -> str:
         return str(self)       
    
-def dfs_hash_flow(pressured_valves, a_path, b_path, dynamic_mem, elephant_mode):
-    max_release = 0
-    
-    # Get current hashstate
-    pos = hash(a_path[-1][0].name + str(a_path[-1][1]))
-    if elephant_mode:
-        pos += hash(b_path[-1][0].name + str(b_path[-1][1]))
-    valve_hash = 0
-    for x in pressured_valves:
-        valve_hash ^= hash(x.name)
-    h = hash_state(pos, valve_hash)
-    
-    # h *= 1000
-    # tmp = a_path[-1][1]
-    # if elephant_mode:
-    #     tmp *= b_path[-1][1]
-    # h += tmp
-    # TODO check if hashstate with less time left exist then return
-    
-    if h in dynamic_mem.keys():
-        max_release = dynamic_mem[h]
-    else:        
-        for i in range(len(pressured_valves)):
-            # Temporarily remove valve so we don't visit an already visited valve
-            tmp = pressured_valves.popleft()
-            
-            # Calculate new time after moving and turning valve
-            a_time = a_path[-1][1] - a_path[-1][0].tunnels[tmp.name] - 1
-            if a_time > 0:
-                # Add move to path
-                a_path.append((tmp, a_time))
-                result = dfs_hash_flow(pressured_valves, a_path, b_path, dynamic_mem, elephant_mode) 
-                if result > max_release:
-                    max_release = result
-                a_path.pop()
-            
-            if elephant_mode and a_path[-1][0].name != b_path[-1][0].name:
-                b_time = b_path[-1][1] - b_path[-1][0].tunnels[tmp.name] - 1
-                if b_time > 0:
+
+   
+def dfs_hash_flow(pressured_valves, a_path, b_path, elephant_mode):
+    def secret_function(pressured_valves, a_path, b_path, dynamic_mem, elephant_mode, break_mem):
+        global test_var
+        max_release = 0
+        # Get current hashstate
+        pos = hash(a_path[-1][0].name + str(a_path[-1][1]))
+        if elephant_mode:
+            pos += hash(b_path[-1][0].name + str(b_path[-1][1]))
+        valve_hash = 0
+        for x in pressured_valves:
+            valve_hash ^= hash(x.name)
+        full_state = hash_state(pos, valve_hash)
+        
+        # Check if path is worth exploring
+        pos_hash = hash(a_path[-1][0].name) + valve_hash
+        time_data = [a_path[-1][1], a_path[-1][2]]
+        if elephant_mode:
+            pos_hash += hash(b_path[-1][0].name)
+            time_data[0] += b_path[-1][1]
+            time_data[1] += b_path[-1][2]
+        if pos_hash in break_mem.keys():
+            for x in break_mem[pos_hash].keys():
+                if break_mem[pos_hash][x] >= time_data[1] and x >= time_data[0]:
+                    # abort path
+                    return 0
+        
+        # Check if path is already calculated
+        if full_state in dynamic_mem.keys():
+            max_release = dynamic_mem[full_state]
+        else:        
+            for i in range(len(pressured_valves)):
+                # Temporarily remove valve so we don't visit an already visited valve
+                tmp = pressured_valves.popleft()
+                
+                # Calculate new time after moving and turning valve
+                a_time = a_path[-1][1] - a_path[-1][0].tunnels[tmp.name] - 1
+                if a_time > 0:
                     # Add move to path
-                    b_path.append((tmp, b_time))
-                    result = dfs_hash_flow(pressured_valves, b_path, a_path, dynamic_mem, elephant_mode) 
+                    a_path.append((tmp, a_time, tmp.flow_dict[a_time] + a_path[-1][2]))
+                    
+                    result = secret_function(pressured_valves, a_path, b_path, dynamic_mem, elephant_mode, break_mem) 
+                    
                     if result > max_release:
                         max_release = result
-                    b_path.pop()
-                    
-            pressured_valves.append(tmp)
+                    a_path.pop()
+                
+                if elephant_mode and a_path[-1][0].name != b_path[-1][0].name and a_path[-1][1] != b_path[-1][1]:
+                    b_time = b_path[-1][1] - b_path[-1][0].tunnels[tmp.name] - 1
+                    if b_time > 0:
+                        # Add move to path
+                        b_path.append((tmp, b_time, tmp.flow_dict[b_time] + b_path[-1][2]))
+                        result = secret_function(pressured_valves, b_path, a_path, dynamic_mem, elephant_mode, break_mem) 
+                        if result > max_release:
+                            max_release = result
+                        b_path.pop()
+                        
+                pressured_valves.append(tmp)
+            # add result to memory    
+            dynamic_mem[full_state] = max_release
             
-        dynamic_mem[h] = max_release
+            if pos_hash not in break_mem.keys():
+                break_mem[pos_hash] = {}
+            if not (time_data[0] in break_mem[pos_hash].keys() and time_data[1] < break_mem[pos_hash][time_data[0]]):
+                break_mem[pos_hash][time_data[0]] = time_data[1]
+            
+        if a_path[-1][1] > 0:
+            max_release += a_path[-1][0].flow_dict[a_path[-1][1]]
         
-    if a_path[-1][1] > 0:
-        max_release += a_path[-1][0].flow_dict[a_path[-1][1]]
-    
-    global test_var
-    if max_release > test_var:
-        test_var = max_release
-        print(test_var)
-    
-    return max_release   
+        
+        if max_release > test_var:
+            test_var = max_release
+            #print(a_path[-1][2])
+            print(test_var)
+        
+        return max_release  
+    return secret_function(pressured_valves, a_path, b_path, {}, elephant_mode, {}) 
 
 def hash_state(pos, unopened_valves):
     return pos * unopened_valves
@@ -126,10 +144,10 @@ test_var = 0
 
 pressured_valves = deque(pressured_valves)
 me_path = deque()
-me_path.append((valves[start], total_time))
+me_path.append((valves[start], total_time, 0))
 dynamic_mem = {}
 pressure_released = 0
-pressure_released = dfs_hash_flow(pressured_valves, me_path, deque(), dynamic_mem, False)
+pressure_released = dfs_hash_flow(pressured_valves, me_path, deque(), False)
 
 
 
@@ -141,10 +159,10 @@ test_var = 0
 total_time = 26
 me_path = deque()
 elephant_path = deque()
-me_path.append((valves[start], total_time))
-elephant_path.append((valves[start], total_time))
+me_path.append((valves[start], total_time, 0))
+elephant_path.append((valves[start], total_time, 0))
 dynamic_mem = {}
-pressure_released = dfs_hash_flow(pressured_valves, me_path, elephant_path, dynamic_mem, True)
+pressure_released = dfs_hash_flow(pressured_valves, me_path, elephant_path, True)
 print("The second answer is: ", pressure_released)
 
 print("The execution time was: ", int((time.perf_counter()-timer)*1000), "ms")
