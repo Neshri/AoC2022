@@ -96,9 +96,9 @@ def dfs_hash_flow(pressured_valves, a_path, b_path, elephant_mode):
         if max_release > test_var:
             test_var = max_release
             #print(a_path[-1][2])
-            print(test_var)
-        
+            print(test_var)    
         return max_release  
+    
     return secret_function(pressured_valves, a_path, b_path, {}, elephant_mode, {}) 
 
 def hash_state(pos, unopened_valves):
