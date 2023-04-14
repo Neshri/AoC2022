@@ -87,21 +87,8 @@ with open("day17input.txt") as f:
 
    
 
-def run_simulation(Shape, instr, number_of_rocks):
-    chamber = set()
-    i_index = 0
-    rock_index = 0
-    rock_counter = 0
-    pos = [2, 3]
-    highest_point = 0
-    last_high = 0
-    change_pattern = []
-    
-    while rock_counter < len(instr) * 10:
-        if rock_counter >= number_of_rocks:
-            return highest_point
-        if rock_counter > len(instr) * 5:
-            change_pattern.append(highest_point - last_high)
+def run_simulation(Shape, instr, rock_target):
+    def detailed_simulation(rock_index, pos, i_index, chamber, highest_point, last_high, rock_counter):
         current_rock = Shape(rock_index, pos)
         while True:
             if instr[i_index] == '<':
@@ -115,6 +102,7 @@ def run_simulation(Shape, instr, number_of_rocks):
         # GravityMove the rock
             has_moved = current_rock.move(0, -1, chamber)
             if not has_moved:
+                # Stop rock and add to static chamber memory
                 for p in current_rock.points:
                     chamber.add((p[0] + current_rock.pos[0], p[1] + current_rock.pos[1]))
                 break
@@ -125,7 +113,28 @@ def run_simulation(Shape, instr, number_of_rocks):
         rock_index += 1
         rock_index = rock_index % 5
         rock_counter += 1
+        return rock_index, pos, i_index, chamber, highest_point, last_high, rock_counter
         
+    # Install variables
+    chamber = set()
+    i_index = 0
+    rock_index = 0
+    rock_counter = 0
+    pos = [2, 3]
+    highest_point = 0
+    last_high = 0
+    change_pattern = []
+    
+    # Do some simulation scouting that we can analyse for patterns
+    while rock_counter < len(instr) * 10:
+        if rock_counter >= rock_target:
+            return highest_point
+        if rock_counter > len(instr) * 5:
+            change_pattern.append(highest_point - last_high)
+        rock_index, pos, i_index, chamber, highest_point, last_high, rock_counter = (
+            detailed_simulation(rock_index, pos, i_index, chamber, highest_point, last_high, rock_counter))
+    
+    # Find a repeating pattern so we can skip most of the simulation
     n = len(change_pattern) // 2
     pattern_height = 0
     while n > 4:
@@ -141,36 +150,15 @@ def run_simulation(Shape, instr, number_of_rocks):
             print("repeat found")
             break
         n -= 1
-    
-    quotient = (number_of_rocks - rock_counter) // n
-    rocks_left = (number_of_rocks - rock_counter)% n
-    total_height = highest_point + quotient * pattern_height
+    rocks_to_skip = (rock_target - rock_counter) // n
+    rocks_left = (rock_target - rock_counter)% n
+    total_height = highest_point + rocks_to_skip * pattern_height
     old_height = highest_point
     rock_counter = 0
+    # Continue simulating where we left off since the big chunk we mathed can be sandwiched in between the real simulation parts
     while rock_counter < rocks_left:
-        current_rock = Shape(rock_index, pos)
-        while True:
-            if instr[i_index] == '<':
-                x = -1
-            else:
-                x = 1
-            i_index += 1
-            i_index %= len(instr)
-        # JetPush the rock
-            current_rock.move(x, 0, chamber)
-        # GravityMove the rock
-            has_moved = current_rock.move(0, -1, chamber)
-            if not has_moved:
-                for p in current_rock.points:
-                    chamber.add((p[0] + current_rock.pos[0], p[1] + current_rock.pos[1]))
-                break
-        last_high = highest_point
-        if current_rock.pos[1] + current_rock.hi_y > highest_point:
-            highest_point = current_rock.pos[1] + current_rock.hi_y
-        pos = [2, highest_point + 4]
-        rock_index += 1
-        rock_index = rock_index % 5
-        rock_counter += 1
+        rock_index, pos, i_index, chamber, highest_point, last_high, rock_counter = (
+            detailed_simulation(rock_index, pos, i_index, chamber, highest_point, last_high, rock_counter))
     highest_point -= old_height
     total_height += highest_point
     return total_height
